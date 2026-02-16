@@ -14,11 +14,7 @@ use crate::config::Config;
 
 /// Internal session state
 struct SessionState {
-    #[allow(dead_code)]
-    id: String,
     handle: TerminalHandle,
-    #[allow(dead_code)]
-    created_at: DateTime<Utc>,
     last_activity: DateTime<Utc>,
     connected: bool,
 }
@@ -140,9 +136,7 @@ impl SessionManager {
             .await?;
 
         let session = SessionState {
-            id: session_id.to_string(),
             handle: handle.clone(),
-            created_at: Utc::now(),
             last_activity: Utc::now(),
             connected: true,
         };

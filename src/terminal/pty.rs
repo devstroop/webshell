@@ -13,20 +13,13 @@ use super::error::TerminalError;
 /// Handle for interacting with a terminal
 #[derive(Clone)]
 pub struct TerminalHandle {
-    #[allow(dead_code)]
-    pub id: String,
     pub input_tx: mpsc::Sender<Vec<u8>>,
 }
 
 /// Internal terminal state
 struct TerminalState {
-    #[allow(dead_code)]
     master: Box<dyn MasterPty + Send>,
     child: Box<dyn Child + Send + Sync>,
-    #[allow(dead_code)]
-    cols: u16,
-    #[allow(dead_code)]
-    rows: u16,
 }
 
 /// Manages PTY terminal instances
@@ -144,22 +137,14 @@ impl PtyManager {
         });
 
         // Store terminal state
-        let terminal_state = TerminalState {
-            master,
-            child,
-            cols,
-            rows,
-        };
+        let terminal_state = TerminalState { master, child };
 
         self.terminals
             .write()
             .await
             .insert(terminal_id.clone(), Arc::new(Mutex::new(terminal_state)));
 
-        Ok(TerminalHandle {
-            id: terminal_id,
-            input_tx,
-        })
+        Ok(TerminalHandle { input_tx })
     }
 
     /// Resize terminal
@@ -202,30 +187,6 @@ impl PtyManager {
         } else {
             Err(TerminalError::NotFound(terminal_id.to_string()))
         }
-    }
-
-    /// Check if terminal is alive
-    #[allow(dead_code)]
-    pub async fn is_alive(&self, terminal_id: &str) -> bool {
-        let terminals = self.terminals.read().await;
-
-        if let Some(terminal) = terminals.get(terminal_id) {
-            let mut state = terminal.lock().await;
-            // Check if child process is still running
-            match state.child.try_wait() {
-                Ok(Some(_)) => false, // Process exited
-                Ok(None) => true,     // Still running
-                Err(_) => false,      // Error checking
-            }
-        } else {
-            false
-        }
-    }
-
-    /// List all terminal IDs
-    #[allow(dead_code)]
-    pub async fn list(&self) -> Vec<String> {
-        self.terminals.read().await.keys().cloned().collect()
     }
 }
 

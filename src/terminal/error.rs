@@ -13,10 +13,6 @@ pub enum TerminalError {
     #[error("PTY error: {0}")]
     PtyError(#[from] std::io::Error),
 
-    #[error("Terminal process exited")]
-    #[allow(dead_code)]
-    ProcessExited,
-
     #[error("Send error: {0}")]
     SendError(String),
 
