@@ -83,13 +83,13 @@ cargo run
 WEBSHELL_HOST=localhost WEBSHELL_USER=admin cargo run
 
 # SSH with password (auto-login)
-WEBSHELL_HOST=192.168.1.50 WEBSHELL_USER=admin WEBSHELL_PASSWORD=secret cargo run
+WEBSHELL_HOST=127.0.0.1 WEBSHELL_USER=admin WEBSHELL_PASSWORD=secret cargo run
 
 # SSH with key file (auto-login)
-WEBSHELL_HOST=192.168.1.50 WEBSHELL_USER=admin WEBSHELL_SSH_KEY=~/.ssh/id_rsa cargo run
+WEBSHELL_HOST=127.0.0.1 WEBSHELL_USER=admin WEBSHELL_SSH_KEY=~/.ssh/id_rsa cargo run
 
 # SSH with encrypted key
-WEBSHELL_HOST=192.168.1.50 WEBSHELL_USER=admin \
+WEBSHELL_HOST=127.0.0.1 WEBSHELL_USER=admin \
   WEBSHELL_SSH_KEY=~/.ssh/id_rsa WEBSHELL_SSH_PASSPHRASE=keypass cargo run
 ```
 
