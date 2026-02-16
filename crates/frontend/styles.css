@@ -1,0 +1,52 @@
+/* Minimal Terminal Styles */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+    width: 100%;
+    background-color: #000;
+    overflow: hidden;
+}
+
+.terminal-fullscreen {
+    height: 100vh;
+    width: 100vw;
+    background-color: #000;
+}
+
+.terminal-content {
+    height: 100%;
+    width: 100%;
+}
+
+/* xterm.js - pure terminal look */
+.xterm {
+    height: 100%;
+    width: 100%;
+}
+
+.xterm-viewport {
+    overflow-y: auto !important;
+}
+
+/* Minimal scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #000;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #333;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}

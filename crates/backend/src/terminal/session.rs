@@ -12,28 +12,12 @@ use super::error::TerminalError;
 use super::pty::{PtyManager, TerminalHandle};
 use crate::config::Config;
 
-/// Terminal configuration
-#[derive(Debug, Clone)]
-pub struct TerminalConfig {
-    /// Maximum terminals per connection
-    pub max_terminals: usize,
-    /// Terminal idle timeout (seconds)
-    pub idle_timeout: u64,
-}
-
-impl Default for TerminalConfig {
-    fn default() -> Self {
-        Self {
-            max_terminals: 10,
-            idle_timeout: 3600, // 1 hour
-        }
-    }
-}
-
 /// Internal session state
 struct SessionState {
+    #[allow(dead_code)]
     id: String,
     handle: TerminalHandle,
+    #[allow(dead_code)]
     created_at: DateTime<Utc>,
     last_activity: DateTime<Utc>,
     connected: bool,
@@ -42,22 +26,19 @@ struct SessionState {
 /// Manages terminal sessions with lifecycle handling
 pub struct SessionManager {
     sessions: Arc<RwLock<HashMap<String, SessionState>>>,
-    pub pty_manager: Arc<PtyManager>,
-    config: TerminalConfig,
+    pty_manager: Arc<PtyManager>,
+    max_terminals: usize,
+    idle_timeout: u64,
     app_config: Arc<Config>,
 }
 
 impl SessionManager {
     pub fn new(app_config: Arc<Config>) -> Self {
-        let config = TerminalConfig {
-            max_terminals: app_config.max_terminals,
-            idle_timeout: app_config.idle_timeout,
-        };
-
         let manager = Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
             pty_manager: Arc::new(PtyManager::new()),
-            config,
+            max_terminals: app_config.max_terminals,
+            idle_timeout: app_config.idle_timeout,
             app_config,
         };
 
@@ -71,7 +52,7 @@ impl SessionManager {
     fn start_cleanup_task(&self) {
         let sessions = self.sessions.clone();
         let pty_manager = self.pty_manager.clone();
-        let timeout = Duration::from_secs(self.config.idle_timeout);
+        let timeout = Duration::from_secs(self.idle_timeout);
 
         tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(60));
@@ -114,20 +95,17 @@ impl SessionManager {
     }
 
     /// Create a new terminal session
-    pub async fn create<F>(
+    pub async fn create_terminal(
         &self,
-        session_id: String,
+        session_id: &str,
         cols: u16,
         rows: u16,
-        output_callback: F,
-    ) -> Result<TerminalHandle, TerminalError>
-    where
-        F: Fn(Vec<u8>) + Send + 'static,
-    {
+        output_callback: Box<dyn Fn(String) + Send + 'static>,
+    ) -> Result<TerminalHandle, TerminalError> {
         // Check max terminals
         {
             let sessions = self.sessions.read().await;
-            if sessions.len() >= self.config.max_terminals {
+            if sessions.len() >= self.max_terminals {
                 return Err(TerminalError::MaxTerminalsReached);
             }
         }
@@ -142,20 +120,27 @@ impl SessionManager {
 
         let env = vec![];
 
+        // Wrap the string callback to work with Vec<u8>
+        let byte_callback = move |data: Vec<u8>| {
+            if let Ok(s) = String::from_utf8(data) {
+                output_callback(s);
+            }
+        };
+
         let handle = self
             .pty_manager
             .spawn(
-                session_id.clone(),
+                session_id.to_string(),
                 cols,
                 rows,
                 Some(cwd),
                 env,
-                output_callback,
+                byte_callback,
             )
             .await?;
 
         let session = SessionState {
-            id: session_id.clone(),
+            id: session_id.to_string(),
             handle: handle.clone(),
             created_at: Utc::now(),
             last_activity: Utc::now(),
@@ -166,71 +151,35 @@ impl SessionManager {
         self.sessions
             .write()
             .await
-            .insert(session_id.clone(), session);
+            .insert(session_id.to_string(), session);
 
         Ok(handle)
     }
 
-    /// Get a session's terminal handle
-    pub async fn get_session(&self, session_id: &str) -> Option<TerminalHandle> {
-        self.sessions
-            .read()
-            .await
-            .get(session_id)
-            .map(|s| s.handle.clone())
-    }
-
-    /// Update activity timestamp
-    pub async fn touch(&self, session_id: &str) {
-        if let Some(session) = self.sessions.write().await.get_mut(session_id) {
-            session.last_activity = Utc::now();
-        }
-    }
-
-    /// Mark session as disconnected (but keep it alive)
-    pub async fn disconnect(&self, session_id: &str) {
-        if let Some(session) = self.sessions.write().await.get_mut(session_id) {
-            session.connected = false;
-        }
-    }
-
-    /// Close and remove session
-    pub async fn close(&self, session_id: &str) -> Result<(), TerminalError> {
-        self.pty_manager.close(session_id).await?;
-
-        let mut sessions = self.sessions.write().await;
-        sessions.remove(session_id);
-
-        Ok(())
-    }
-
-    /// Send input to a terminal
-    pub async fn send_input(&self, session_id: &str, data: Vec<u8>) -> Result<(), TerminalError> {
+    /// Write input to a terminal
+    pub async fn write_to_terminal(&self, session_id: &str, input: &str) -> Result<(), TerminalError> {
         let sessions = self.sessions.read().await;
 
         if let Some(session) = sessions.get(session_id) {
-            // Update activity timestamp
+            let handle = session.handle.clone();
             drop(sessions);
+            
+            // Update activity
             self.touch(session_id).await;
 
-            // Get handle and send input
-            if let Some(handle) = self.get_session(session_id).await {
-                handle
-                    .input_tx
-                    .send(data)
-                    .await
-                    .map_err(|e| TerminalError::SendError(e.to_string()))?;
-                Ok(())
-            } else {
-                Err(TerminalError::NotFound(session_id.to_string()))
-            }
+            handle
+                .input_tx
+                .send(input.as_bytes().to_vec())
+                .await
+                .map_err(|e| TerminalError::SendError(e.to_string()))?;
+            Ok(())
         } else {
             Err(TerminalError::NotFound(session_id.to_string()))
         }
     }
 
     /// Resize a terminal
-    pub async fn resize(
+    pub async fn resize_terminal(
         &self,
         session_id: &str,
         cols: u16,
@@ -239,5 +188,22 @@ impl SessionManager {
         self.pty_manager.resize(session_id, cols, rows).await?;
         self.touch(session_id).await;
         Ok(())
+    }
+
+    /// Close a terminal
+    pub async fn close_terminal(&self, session_id: &str) {
+        if let Err(e) = self.pty_manager.close(session_id).await {
+            tracing::warn!("Error closing terminal {}: {}", session_id, e);
+        }
+
+        let mut sessions = self.sessions.write().await;
+        sessions.remove(session_id);
+    }
+
+    /// Update activity timestamp
+    async fn touch(&self, session_id: &str) {
+        if let Some(session) = self.sessions.write().await.get_mut(session_id) {
+            session.last_activity = Utc::now();
+        }
     }
 }

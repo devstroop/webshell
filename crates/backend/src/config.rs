@@ -19,7 +19,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             port: 3000,
-            workspace_dir: "/workspace".to_string(),
+            workspace_dir: env::var("HOME").unwrap_or_else(|_| "/tmp".to_string()),
             max_terminals: 10,
             idle_timeout: 3600,
         }
@@ -29,13 +29,14 @@ impl Default for Config {
 impl Config {
     /// Load configuration from environment variables
     pub fn from_env() -> Self {
+        let default_workspace = env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+        
         Self {
             port: env::var("PORT")
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(3000),
-            workspace_dir: env::var("WORKSPACE_DIR")
-                .unwrap_or_else(|_| "/workspace".to_string()),
+            workspace_dir: env::var("WORKSPACE_DIR").unwrap_or(default_workspace),
             max_terminals: env::var("MAX_TERMINALS")
                 .ok()
                 .and_then(|s| s.parse().ok())

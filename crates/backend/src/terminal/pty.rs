@@ -22,7 +22,9 @@ struct TerminalState {
     #[allow(dead_code)]
     master: Box<dyn MasterPty + Send>,
     child: Box<dyn Child + Send + Sync>,
+    #[allow(dead_code)]
     cols: u16,
+    #[allow(dead_code)]
     rows: u16,
 }
 
@@ -169,15 +171,13 @@ impl PtyManager {
         let terminals = self.terminals.read().await;
 
         if let Some(terminal) = terminals.get(terminal_id) {
-            let mut state = terminal.lock().await;
+            let state = terminal.lock().await;
             state.master.resize(PtySize {
                 rows,
                 cols,
                 pixel_width: 0,
                 pixel_height: 0,
             })?;
-            state.cols = cols;
-            state.rows = rows;
             Ok(())
         } else {
             Err(TerminalError::NotFound(terminal_id.to_string()))
@@ -204,6 +204,7 @@ impl PtyManager {
     }
 
     /// Check if terminal is alive
+    #[allow(dead_code)]
     pub async fn is_alive(&self, terminal_id: &str) -> bool {
         let terminals = self.terminals.read().await;
 
@@ -221,6 +222,7 @@ impl PtyManager {
     }
 
     /// List all terminal IDs
+    #[allow(dead_code)]
     pub async fn list(&self) -> Vec<String> {
         self.terminals.read().await.keys().cloned().collect()
     }

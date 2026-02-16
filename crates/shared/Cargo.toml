@@ -1,0 +1,14 @@
+[package]
+name = "webshell-shared"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { version = "1", features = ["v4", "serde", "js"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+uuid.workspace = true
