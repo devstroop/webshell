@@ -55,23 +55,23 @@ pub enum WsMessage {
     /// Client requests to open a terminal
     #[serde(rename = "term.open")]
     TerminalOpen(TerminalOpenRequest),
-    
+
     /// Client sends input to terminal
     #[serde(rename = "term.input")]
     TerminalInput(TerminalInput),
-    
+
     /// Client requests terminal resize
     #[serde(rename = "term.resize")]
     TerminalResize(TerminalResize),
-    
+
     /// Client requests to close terminal
     #[serde(rename = "term.close")]
     TerminalClose(TerminalClose),
-    
+
     /// Server sends shell output
     #[serde(rename = "shell.output")]
     ShellOutput(ShellOutput),
-    
+
     /// Server notifies shell exit
     #[serde(rename = "shell.exit")]
     ShellExit(ShellExit),

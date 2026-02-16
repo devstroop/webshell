@@ -30,7 +30,7 @@ impl Config {
     /// Load configuration from environment variables
     pub fn from_env() -> Self {
         let default_workspace = env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-        
+
         Self {
             port: env::var("PORT")
                 .ok()

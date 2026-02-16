@@ -157,13 +157,17 @@ impl SessionManager {
     }
 
     /// Write input to a terminal
-    pub async fn write_to_terminal(&self, session_id: &str, input: &str) -> Result<(), TerminalError> {
+    pub async fn write_to_terminal(
+        &self,
+        session_id: &str,
+        input: &str,
+    ) -> Result<(), TerminalError> {
         let sessions = self.sessions.read().await;
 
         if let Some(session) = sessions.get(session_id) {
             let handle = session.handle.clone();
             drop(sessions);
-            
+
             // Update activity
             self.touch(session_id).await;
 

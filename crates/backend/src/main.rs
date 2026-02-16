@@ -66,14 +66,17 @@ async fn main() {
     // Resolve frontend dist path (relative to workspace root or binary location)
     let frontend_dist = std::env::var("WEBSHELL_STATIC_DIR")
         .unwrap_or_else(|_| "./crates/frontend/dist".to_string());
-    
+
     tracing::info!("Serving static files from: {}", frontend_dist);
 
     // Build the application router
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/ws", get(ws_handler))
-        .fallback_service(ServeDir::new(&frontend_dist).fallback(ServeDir::new(format!("{}/index.html", frontend_dist))))
+        .fallback_service(
+            ServeDir::new(&frontend_dist)
+                .fallback(ServeDir::new(format!("{}/index.html", frontend_dist))),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
@@ -102,10 +105,7 @@ async fn health_check() -> &'static str {
 }
 
 /// WebSocket handler
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
 
@@ -149,18 +149,14 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 }
 
 /// Handle a WebSocket message
-async fn handle_message(
-    msg: WsMessage,
-    state: &AppState,
-    tx: mpsc::UnboundedSender<WsMessage>,
-) {
+async fn handle_message(msg: WsMessage, state: &AppState, tx: mpsc::UnboundedSender<WsMessage>) {
     match msg {
         WsMessage::TerminalOpen(req) => {
             tracing::info!("Opening terminal: {}", req.id);
-            
+
             let tx_clone = tx.clone();
             let terminal_id = req.id.clone();
-            
+
             // Create output callback
             let output_callback = move |output: String| {
                 let _ = tx_clone.send(WsMessage::ShellOutput(webshell_shared::ShellOutput {
@@ -170,12 +166,11 @@ async fn handle_message(
             };
 
             // Create the terminal
-            match state.session_manager.create_terminal(
-                &req.id,
-                req.cols,
-                req.rows,
-                Box::new(output_callback),
-            ).await {
+            match state
+                .session_manager
+                .create_terminal(&req.id, req.cols, req.rows, Box::new(output_callback))
+                .await
+            {
                 Ok(_) => {
                     tracing::info!("Terminal created: {}", req.id);
                 }
@@ -184,24 +179,32 @@ async fn handle_message(
                 }
             }
         }
-        
+
         WsMessage::TerminalInput(input) => {
-            if let Err(e) = state.session_manager.write_to_terminal(&input.id, &input.input).await {
+            if let Err(e) = state
+                .session_manager
+                .write_to_terminal(&input.id, &input.input)
+                .await
+            {
                 tracing::error!("Failed to write to terminal {}: {}", input.id, e);
             }
         }
-        
+
         WsMessage::TerminalResize(resize) => {
-            if let Err(e) = state.session_manager.resize_terminal(&resize.id, resize.cols, resize.rows).await {
+            if let Err(e) = state
+                .session_manager
+                .resize_terminal(&resize.id, resize.cols, resize.rows)
+                .await
+            {
                 tracing::error!("Failed to resize terminal {}: {}", resize.id, e);
             }
         }
-        
+
         WsMessage::TerminalClose(close) => {
             tracing::info!("Closing terminal: {}", close.id);
             state.session_manager.close_terminal(&close.id).await;
         }
-        
+
         // Server-to-client messages - ignore if received from client
         WsMessage::ShellOutput(_) | WsMessage::ShellExit(_) => {}
     }

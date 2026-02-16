@@ -65,15 +65,20 @@ pub struct TerminalOptions {
 impl TerminalOptions {
     pub fn to_js_value(&self) -> JsValue {
         let obj = js_sys::Object::new();
-        
+
         js_sys::Reflect::set(&obj, &"cursorBlink".into(), &self.cursor_blink.into()).unwrap();
-        js_sys::Reflect::set(&obj, &"cursorStyle".into(), &self.cursor_style.clone().into()).unwrap();
+        js_sys::Reflect::set(
+            &obj,
+            &"cursorStyle".into(),
+            &self.cursor_style.clone().into(),
+        )
+        .unwrap();
         js_sys::Reflect::set(&obj, &"fontSize".into(), &self.font_size.into()).unwrap();
         js_sys::Reflect::set(&obj, &"fontFamily".into(), &self.font_family.clone().into()).unwrap();
         js_sys::Reflect::set(&obj, &"scrollback".into(), &self.scrollback.into()).unwrap();
         js_sys::Reflect::set(&obj, &"allowTransparency".into(), &true.into()).unwrap();
         js_sys::Reflect::set(&obj, &"convertEol".into(), &true.into()).unwrap();
-        
+
         // Theme
         let theme = js_sys::Object::new();
         js_sys::Reflect::set(&theme, &"background".into(), &"#1a1b26".into()).unwrap();
@@ -97,9 +102,9 @@ impl TerminalOptions {
         js_sys::Reflect::set(&theme, &"brightMagenta".into(), &"#d670d6".into()).unwrap();
         js_sys::Reflect::set(&theme, &"brightCyan".into(), &"#29b8db".into()).unwrap();
         js_sys::Reflect::set(&theme, &"brightWhite".into(), &"#ffffff".into()).unwrap();
-        
+
         js_sys::Reflect::set(&obj, &"theme".into(), &theme).unwrap();
-        
+
         obj.into()
     }
 }

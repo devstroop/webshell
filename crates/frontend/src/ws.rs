@@ -105,10 +105,12 @@ impl Drop for WsClient {
 fn get_ws_url() -> String {
     let window = web_sys::window().expect("no global window");
     let location = window.location();
-    
+
     let protocol = location.protocol().unwrap_or_else(|_| "http:".to_string());
     let ws_protocol = if protocol == "https:" { "wss:" } else { "ws:" };
-    let host = location.host().unwrap_or_else(|_| "localhost:3000".to_string());
-    
+    let host = location
+        .host()
+        .unwrap_or_else(|_| "localhost:3000".to_string());
+
     format!("{}//{}/ws", ws_protocol, host)
 }
