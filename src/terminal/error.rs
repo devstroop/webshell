@@ -14,6 +14,7 @@ pub enum TerminalError {
     PtyError(#[from] std::io::Error),
 
     #[error("Terminal process exited")]
+    #[allow(dead_code)]
     ProcessExited,
 
     #[error("Send error: {0}")]

@@ -46,11 +46,13 @@ impl client::Handler for ClientHandler {
 }
 
 /// SSH terminal session
+#[allow(dead_code)]
 pub struct SshSession {
     session: client::Handle<ClientHandler>,
     channel: Channel<client::Msg>,
 }
 
+#[allow(dead_code)]
 impl SshSession {
     /// Connect to SSH server and authenticate
     pub async fn connect(config: SshConfig) -> Result<Self, String> {

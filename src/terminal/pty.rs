@@ -13,6 +13,7 @@ use super::error::TerminalError;
 /// Handle for interacting with a terminal
 #[derive(Clone)]
 pub struct TerminalHandle {
+    #[allow(dead_code)]
     pub id: String,
     pub input_tx: mpsc::Sender<Vec<u8>>,
 }
@@ -238,10 +239,7 @@ fn get_default_shell() -> &'static str {
     {
         std::env::var("SHELL")
             .ok()
-            .and_then(|s| {
-                // Leak the string to get a static reference
-                Some(Box::leak(s.into_boxed_str()) as &'static str)
-            })
+            .map(|s| Box::leak(s.into_boxed_str()) as &'static str)
             .unwrap_or("/bin/bash")
     }
 }

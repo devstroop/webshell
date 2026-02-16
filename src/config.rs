@@ -34,6 +34,8 @@ pub struct Config {
     pub idle_timeout: u64,
     /// Pre-configured host (optional)
     pub host: Option<String>,
+    /// SSH port for remote connections (default: 22)
+    pub ssh_port: u16,
     /// Pre-configured username (optional)
     pub user: Option<String>,
     /// Authentication method
@@ -48,6 +50,7 @@ impl Default for Config {
             max_terminals: 10,
             idle_timeout: 3600,
             host: None,
+            ssh_port: 22,
             user: None,
             auth: AuthMethod::None,
         }
@@ -107,6 +110,10 @@ impl Config {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(3600),
             host: env::var("WEBSHELL_HOST").ok().filter(|s| !s.is_empty()),
+            ssh_port: env::var("WEBSHELL_PORT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(22),
             user: env::var("WEBSHELL_USER").ok().filter(|s| !s.is_empty()),
             auth,
         }

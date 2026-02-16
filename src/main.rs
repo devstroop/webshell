@@ -9,7 +9,7 @@ use axum::{
         State,
     },
     http::StatusCode,
-    response::{Html, IntoResponse, Redirect},
+    response::IntoResponse,
     routing::{get, post},
     Form, Json, Router,
 };
@@ -35,8 +35,8 @@ mod types;
 
 use auth::{authenticate_os, SessionStore};
 use config::{AuthMethod, Config};
-use ssh::{SshAuth, SshConfig, SshSession};
-use terminal::{PtyManager, SessionManager};
+use ssh::{SshAuth, SshConfig};
+use terminal::SessionManager;
 use types::{ShellOutput, WsMessage};
 
 #[derive(Clone)]
@@ -255,7 +255,7 @@ async fn login_handler(
             // Test SSH connection
             let ssh_config = SshConfig {
                 host: host.clone(),
-                port: 22,
+                port: state.config.ssh_port,
                 user: username.clone(),
                 auth: ssh_auth,
             };
