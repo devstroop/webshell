@@ -1,0 +1,23 @@
+# Rust
+backend/target/
+**/*.rs.bk
+backend/Cargo.lock
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log

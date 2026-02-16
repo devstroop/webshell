@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  webshell:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - WORKSPACE_DIR=/workspace
+      - MAX_TERMINALS=10
+      - IDLE_TIMEOUT=3600
+      - RUST_LOG=info
+    volumes:
+      - workspace:/workspace
+    restart: unless-stopped
+
+volumes:
+  workspace:
