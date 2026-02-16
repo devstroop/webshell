@@ -24,7 +24,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            port: 3000,
+            port: 2222,
             workspace_dir: env::var("HOME").unwrap_or_else(|_| "/tmp".to_string()),
             max_terminals: 10,
             idle_timeout: 3600,
@@ -44,7 +44,7 @@ impl Config {
             port: env::var("PORT")
                 .ok()
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(3000),
+                .unwrap_or(2222),
             workspace_dir: env::var("WORKSPACE_DIR").unwrap_or(default_workspace),
             max_terminals: env::var("MAX_TERMINALS")
                 .ok()

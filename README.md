@@ -20,7 +20,7 @@ cargo build --release
 ./target/release/webshell
 ```
 
-Open http://localhost:3000 and login with your OS username/password.
+Open http://localhost:2222 and login with your OS username/password.
 
 ## Architecture
 
@@ -57,7 +57,7 @@ webshell/
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | 3000 | Server port |
+| `PORT` | 2222 | Server port |
 | `WORKSPACE_DIR` | ~ | Terminal working directory |
 | `RUST_LOG` | info | Log level |
 | `WEBSHELL_HOST` | (none) | Pre-configured host (hides field if set) |
@@ -71,10 +71,10 @@ webshell/
 cargo run
 
 # Host pre-set, ask for user + password
-WEBSHELL_HOST=192.168.1.50 cargo run
+WEBSHELL_HOST=127.0.0.1 cargo run
 
 # Only ask for password
-WEBSHELL_HOST=192.168.1.50 WEBSHELL_USER=admin cargo run
+WEBSHELL_HOST=127.0.0.1 WEBSHELL_USER=admin cargo run
 
 # Auto-login (direct to terminal)
 WEBSHELL_HOST=localhost WEBSHELL_USER=admin WEBSHELL_PASSWORD=secret cargo run

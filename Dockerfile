@@ -22,9 +22,9 @@ COPY static /app/static
 
 RUN mkdir -p /workspace
 
-EXPOSE 3000
+EXPOSE 2222
 
-ENV PORT=3000
+ENV PORT=2222
 ENV WORKSPACE_DIR=/workspace
 ENV WEBSHELL_STATIC_DIR=/app/static
 ENV RUST_LOG=info
