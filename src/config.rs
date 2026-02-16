@@ -2,6 +2,19 @@
 
 use std::env;
 
+/// Authentication method
+#[derive(Debug, Clone)]
+pub enum AuthMethod {
+    /// Password authentication
+    Password(String),
+    /// SSH key file path
+    KeyFile { path: String, passphrase: Option<String> },
+    /// SSH key data (inline)
+    KeyData { data: String, passphrase: Option<String> },
+    /// No pre-configured auth (prompt user)
+    None,
+}
+
 /// Application configuration
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -17,8 +30,8 @@ pub struct Config {
     pub host: Option<String>,
     /// Pre-configured username (optional)
     pub user: Option<String>,
-    /// Pre-configured password (optional) - enables auto-login
-    pub password: Option<String>,
+    /// Authentication method
+    pub auth: AuthMethod,
 }
 
 impl Default for Config {
@@ -30,7 +43,7 @@ impl Default for Config {
             idle_timeout: 3600,
             host: None,
             user: None,
-            password: None,
+            auth: AuthMethod::None,
         }
     }
 }
@@ -39,6 +52,31 @@ impl Config {
     /// Load configuration from environment variables
     pub fn from_env() -> Self {
         let default_workspace = env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+
+        // Determine auth method from env vars
+        let passphrase = env::var("WEBSHELL_SSH_PASSPHRASE").ok().filter(|s| !s.is_empty());
+        
+        let auth = if let Ok(key_data) = env::var("WEBSHELL_SSH_KEY_DATA") {
+            if !key_data.is_empty() {
+                AuthMethod::KeyData { data: key_data, passphrase }
+            } else {
+                AuthMethod::None
+            }
+        } else if let Ok(key_path) = env::var("WEBSHELL_SSH_KEY") {
+            if !key_path.is_empty() {
+                AuthMethod::KeyFile { path: key_path, passphrase }
+            } else {
+                AuthMethod::None
+            }
+        } else if let Ok(password) = env::var("WEBSHELL_PASSWORD") {
+            if !password.is_empty() {
+                AuthMethod::Password(password)
+            } else {
+                AuthMethod::None
+            }
+        } else {
+            AuthMethod::None
+        };
 
         Self {
             port: env::var("PORT")
@@ -56,7 +94,7 @@ impl Config {
                 .unwrap_or(3600),
             host: env::var("WEBSHELL_HOST").ok().filter(|s| !s.is_empty()),
             user: env::var("WEBSHELL_USER").ok().filter(|s| !s.is_empty()),
-            password: env::var("WEBSHELL_PASSWORD").ok().filter(|s| !s.is_empty()),
+            auth,
         }
     }
 
@@ -68,8 +106,18 @@ impl Config {
         }
     }
 
-    /// Check if auto-login is enabled (all credentials provided)
+    /// Check if auto-login is enabled (user + auth configured)
     pub fn auto_login(&self) -> bool {
-        self.user.is_some() && self.password.is_some()
+        self.user.is_some() && !matches!(self.auth, AuthMethod::None)
+    }
+    
+    /// Get auth method name for UI
+    pub fn auth_method_name(&self) -> &'static str {
+        match &self.auth {
+            AuthMethod::Password(_) => "password",
+            AuthMethod::KeyFile { .. } => "key_file",
+            AuthMethod::KeyData { .. } => "key_data",
+            AuthMethod::None => "none",
+        }
     }
 }

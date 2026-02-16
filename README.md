@@ -1,10 +1,11 @@
 # WebShell
 
-A minimal web-based terminal with OS-native authentication. Pure Rust backend, vanilla JS frontend.
+A minimal web-based terminal with OS-native authentication and SSH support. Pure Rust backend, vanilla JS frontend.
 
 ## Features
 
-- **OS Authentication** - Login with system credentials (macOS/Linux)
+- **Local + Remote** - Connect to localhost (PTY) or remote servers (SSH)
+- **Flexible Auth** - Password or SSH key authentication
 - **WebSocket Terminal** - Real-time PTY via native WebSocket
 - **Minimal Frontend** - ~100 lines vanilla JS, no build step
 - **Single Binary** - One Rust executable serves everything
@@ -20,7 +21,7 @@ cargo build --release
 ./target/release/webshell
 ```
 
-Open http://localhost:2222 and login with your OS username/password.
+Open http://localhost:2222 and login.
 
 ## Architecture
 
@@ -30,11 +31,15 @@ Browser (xterm.js)
        ▼
    Rust (Axum)
        │
-   ┌───┴───┐
-   │  PTY  │ ← OS Auth (dscl/su)
-   └───┬───┘
-       ▼
-     Shell
+   ┌───┴───────────────┐
+   │   Connection      │
+   │   Router          │
+   └───┬───────┬───────┘
+       │       │
+   ┌───┴───┐ ┌─┴────┐
+   │ Local │ │ SSH  │
+   │  PTY  │ │Client│
+   └───────┘ └──────┘
 ```
 
 ## Project Structure
@@ -45,6 +50,7 @@ webshell/
 │   ├── main.rs      # HTTP server, WebSocket, routes
 │   ├── auth.rs      # OS authentication & sessions
 │   ├── config.rs    # Environment configuration
+│   ├── ssh.rs       # SSH client for remote connections
 │   ├── types.rs     # WebSocket message types
 │   └── terminal/    # PTY management
 ├── static/
@@ -60,9 +66,12 @@ webshell/
 | `PORT` | 2222 | Server port |
 | `WORKSPACE_DIR` | ~ | Terminal working directory |
 | `RUST_LOG` | info | Log level |
-| `WEBSHELL_HOST` | (none) | Pre-configured host (hides field if set) |
-| `WEBSHELL_USER` | (none) | Pre-configured username (hides field if set) |
-| `WEBSHELL_PASSWORD` | (none) | Pre-configured password (auto-login if set with user) |
+| `WEBSHELL_HOST` | (none) | Target host (localhost = local PTY, else SSH) |
+| `WEBSHELL_USER` | (none) | Username for connection |
+| `WEBSHELL_PASSWORD` | (none) | Password authentication |
+| `WEBSHELL_SSH_KEY` | (none) | Path to SSH private key file |
+| `WEBSHELL_SSH_KEY_DATA` | (none) | SSH private key content (for secrets managers) |
+| `WEBSHELL_SSH_PASSPHRASE` | (none) | Passphrase for encrypted SSH keys |
 
 ### Examples
 
@@ -70,14 +79,18 @@ webshell/
 # Full login form (host, user, password)
 cargo run
 
-# Host pre-set, ask for user + password
-WEBSHELL_HOST=127.0.0.1 cargo run
+# Local terminal with pre-set user
+WEBSHELL_HOST=localhost WEBSHELL_USER=admin cargo run
 
-# Only ask for password
-WEBSHELL_HOST=127.0.0.1 WEBSHELL_USER=admin cargo run
+# SSH with password (auto-login)
+WEBSHELL_HOST=192.168.1.50 WEBSHELL_USER=admin WEBSHELL_PASSWORD=secret cargo run
 
-# Auto-login (direct to terminal)
-WEBSHELL_HOST=localhost WEBSHELL_USER=admin WEBSHELL_PASSWORD=secret cargo run
+# SSH with key file (auto-login)
+WEBSHELL_HOST=192.168.1.50 WEBSHELL_USER=admin WEBSHELL_SSH_KEY=~/.ssh/id_rsa cargo run
+
+# SSH with encrypted key
+WEBSHELL_HOST=192.168.1.50 WEBSHELL_USER=admin \
+  WEBSHELL_SSH_KEY=~/.ssh/id_rsa WEBSHELL_SSH_PASSPHRASE=keypass cargo run
 ```
 
 ## WebSocket Protocol

@@ -38,6 +38,11 @@ futures = "0.3"
 # Terminal/PTY
 portable-pty = "0.8"
 
+# SSH client
+russh = "0.44"
+russh-keys = "0.44"
+async-trait = "0.1"
+
 # Date/Time
 chrono = { version = "0.4", features = ["serde"] }
 

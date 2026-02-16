@@ -29,11 +29,13 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod auth;
 mod config;
+mod ssh;
 mod terminal;
 mod types;
 
 use auth::{authenticate_os, SessionStore};
-use config::Config;
+use config::{AuthMethod, Config};
+use ssh::{SshAuth, SshConfig, SshSession};
 use terminal::{PtyManager, SessionManager};
 use types::{ShellOutput, WsMessage};
 
@@ -137,8 +139,12 @@ struct ConfigResponse {
     host: Option<String>,
     /// Pre-configured user (None = show field)
     user: Option<String>,
-    /// If true, auto-login (password is also set)
+    /// Auth method: "none", "password", "key_file", "key_data"
+    auth_method: String,
+    /// If true, auto-login (user + auth configured)
     auto_login: bool,
+    /// Is this a local connection?
+    is_local: bool,
 }
 
 /// Config handler - returns UI configuration
@@ -146,7 +152,9 @@ async fn config_handler(State(state): State<AppState>) -> Json<ConfigResponse> {
     Json(ConfigResponse {
         host: state.config.host.clone(),
         user: state.config.user.clone(),
+        auth_method: state.config.auth_method_name().to_string(),
         auto_login: state.config.auto_login(),
+        is_local: state.config.is_local(),
     })
 }
 
@@ -166,7 +174,7 @@ struct LoginResponse {
     username: Option<String>,
 }
 
-/// Login handler - authenticates against OS
+/// Login handler - authenticates against OS or SSH
 /// Uses env vars if available, falling back to form values
 async fn login_handler(
     State(state): State<AppState>,
@@ -174,32 +182,78 @@ async fn login_handler(
     Form(login): Form<LoginRequest>,
 ) -> impl IntoResponse {
     // Use configured values, fall back to form input
-    let _host = state.config.host.clone()
+    let host = state.config.host.clone()
         .or(login.host)
         .unwrap_or_else(|| "localhost".to_string());
     let username = state.config.user.clone()
         .or(login.username)
         .unwrap_or_default();
-    let password = state.config.password.clone()
-        .or(login.password)
-        .unwrap_or_default();
+    
+    // Determine auth method
+    let form_password = login.password.unwrap_or_default();
+    let is_local = host == "localhost" || host == "127.0.0.1" || host.starts_with("127.");
 
-    if username.is_empty() || password.is_empty() {
-        return (
-            jar,
-            Json(LoginResponse {
-                success: false,
-                message: "Username and password required".to_string(),
-                username: None,
-            }),
-        );
-    }
+    tracing::info!("Login attempt for user: {} on host: {} (local: {})", username, host, is_local);
 
-    tracing::info!("Login attempt for user: {}", username);
+    let auth_result = if is_local {
+        // For local connections, use OS auth
+        let password = match &state.config.auth {
+            AuthMethod::Password(p) => p.clone(),
+            _ => form_password.clone(),
+        };
+        
+        if username.is_empty() || password.is_empty() {
+            Err("Username and password required".to_string())
+        } else {
+            authenticate_os(&username, &password)
+        }
+    } else {
+        // For remote connections, use SSH
+        let ssh_auth = match &state.config.auth {
+            AuthMethod::Password(p) => SshAuth::Password(p.clone()),
+            AuthMethod::KeyFile { path, passphrase } => SshAuth::KeyFile { 
+                path: path.clone(), 
+                passphrase: passphrase.clone() 
+            },
+            AuthMethod::KeyData { data, passphrase } => SshAuth::KeyData { 
+                data: data.clone(), 
+                passphrase: passphrase.clone() 
+            },
+            AuthMethod::None => {
+                // Use form password if no auth method configured
+                if form_password.is_empty() {
+                    return (
+                        jar,
+                        Json(LoginResponse {
+                            success: false,
+                            message: "Password required".to_string(),
+                            username: None,
+                        }),
+                    );
+                }
+                SshAuth::Password(form_password)
+            }
+        };
 
-    // TODO: When host != localhost, use SSH instead of local auth
-    // For now, always use local OS auth
-    match authenticate_os(&username, &password) {
+        if username.is_empty() {
+            Err("Username required".to_string())
+        } else {
+            // Test SSH connection
+            let ssh_config = SshConfig {
+                host: host.clone(),
+                port: 22,
+                user: username.clone(),
+                auth: ssh_auth,
+            };
+            
+            match ssh::test_connection(ssh_config).await {
+                Ok(_) => Ok(username.clone()),
+                Err(e) => Err(e),
+            }
+        }
+    };
+
+    match auth_result {
         Ok(username) => {
             let token = state.auth_sessions.create_session(username.clone()).await;
             tracing::info!("Login successful for user: {}", username);
@@ -225,7 +279,7 @@ async fn login_handler(
                 jar,
                 Json(LoginResponse {
                     success: false,
-                    message: "Invalid username or password".to_string(),
+                    message: e,
                     username: None,
                 }),
             )
