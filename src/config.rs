@@ -8,9 +8,15 @@ pub enum AuthMethod {
     /// Password authentication
     Password(String),
     /// SSH key file path
-    KeyFile { path: String, passphrase: Option<String> },
+    KeyFile {
+        path: String,
+        passphrase: Option<String>,
+    },
     /// SSH key data (inline)
-    KeyData { data: String, passphrase: Option<String> },
+    KeyData {
+        data: String,
+        passphrase: Option<String>,
+    },
     /// No pre-configured auth (prompt user)
     None,
 }
@@ -54,17 +60,25 @@ impl Config {
         let default_workspace = env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
 
         // Determine auth method from env vars
-        let passphrase = env::var("WEBSHELL_SSH_PASSPHRASE").ok().filter(|s| !s.is_empty());
-        
+        let passphrase = env::var("WEBSHELL_SSH_PASSPHRASE")
+            .ok()
+            .filter(|s| !s.is_empty());
+
         let auth = if let Ok(key_data) = env::var("WEBSHELL_SSH_KEY_DATA") {
             if !key_data.is_empty() {
-                AuthMethod::KeyData { data: key_data, passphrase }
+                AuthMethod::KeyData {
+                    data: key_data,
+                    passphrase,
+                }
             } else {
                 AuthMethod::None
             }
         } else if let Ok(key_path) = env::var("WEBSHELL_SSH_KEY") {
             if !key_path.is_empty() {
-                AuthMethod::KeyFile { path: key_path, passphrase }
+                AuthMethod::KeyFile {
+                    path: key_path,
+                    passphrase,
+                }
             } else {
                 AuthMethod::None
             }
@@ -110,7 +124,7 @@ impl Config {
     pub fn auto_login(&self) -> bool {
         self.user.is_some() && !matches!(self.auth, AuthMethod::None)
     }
-    
+
     /// Get auth method name for UI
     pub fn auth_method_name(&self) -> &'static str {
         match &self.auth {

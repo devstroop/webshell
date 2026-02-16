@@ -9,8 +9,14 @@ use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub enum SshAuth {
     Password(String),
-    KeyFile { path: String, passphrase: Option<String> },
-    KeyData { data: String, passphrase: Option<String> },
+    KeyFile {
+        path: String,
+        passphrase: Option<String>,
+    },
+    KeyData {
+        data: String,
+        passphrase: Option<String>,
+    },
 }
 
 /// SSH connection configuration
@@ -50,21 +56,19 @@ impl SshSession {
     pub async fn connect(config: SshConfig) -> Result<Self, String> {
         let russh_config = client::Config::default();
         let config_arc = Arc::new(russh_config);
-        
+
         let addr = format!("{}:{}", config.host, config.port);
-        
+
         let mut session = client::connect(config_arc, &addr, ClientHandler)
             .await
             .map_err(|e| format!("SSH connection failed: {}", e))?;
 
         // Authenticate
         let auth_result = match config.auth {
-            SshAuth::Password(password) => {
-                session
-                    .authenticate_password(&config.user, &password)
-                    .await
-                    .map_err(|e| format!("Password auth failed: {}", e))?
-            }
+            SshAuth::Password(password) => session
+                .authenticate_password(&config.user, &password)
+                .await
+                .map_err(|e| format!("Password auth failed: {}", e))?,
             SshAuth::KeyFile { path, passphrase } => {
                 let key = load_secret_key(&path, passphrase.as_deref())
                     .map_err(|e| format!("Failed to load key file: {}", e))?;
@@ -99,15 +103,7 @@ impl SshSession {
     /// Request a PTY and start a shell
     pub async fn request_pty(&mut self, cols: u32, rows: u32) -> Result<(), String> {
         self.channel
-            .request_pty(
-                false,
-                "xterm-256color",
-                cols,
-                rows,
-                0,
-                0,
-                &[],
-            )
+            .request_pty(false, "xterm-256color", cols, rows, 0, 0, &[])
             .await
             .map_err(|e| format!("PTY request failed: {}", e))?;
 

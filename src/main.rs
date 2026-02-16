@@ -80,14 +80,17 @@ async fn main() {
     };
 
     // Resolve static files path
-    let static_dir = std::env::var("WEBSHELL_STATIC_DIR")
-        .unwrap_or_else(|_| "./static".to_string());
+    let static_dir =
+        std::env::var("WEBSHELL_STATIC_DIR").unwrap_or_else(|_| "./static".to_string());
 
     tracing::info!("Serving static files from: {}", static_dir);
 
     // Log connection mode
     if config.auto_login() {
-        tracing::info!("Auto-login enabled for user: {}", config.user.as_deref().unwrap_or(""));
+        tracing::info!(
+            "Auto-login enabled for user: {}",
+            config.user.as_deref().unwrap_or("")
+        );
     }
     if let Some(host) = &config.host {
         tracing::info!("Target host: {}", host);
@@ -182,18 +185,29 @@ async fn login_handler(
     Form(login): Form<LoginRequest>,
 ) -> impl IntoResponse {
     // Use configured values, fall back to form input
-    let host = state.config.host.clone()
+    let host = state
+        .config
+        .host
+        .clone()
         .or(login.host)
         .unwrap_or_else(|| "localhost".to_string());
-    let username = state.config.user.clone()
+    let username = state
+        .config
+        .user
+        .clone()
         .or(login.username)
         .unwrap_or_default();
-    
+
     // Determine auth method
     let form_password = login.password.unwrap_or_default();
     let is_local = host == "localhost" || host == "127.0.0.1" || host.starts_with("127.");
 
-    tracing::info!("Login attempt for user: {} on host: {} (local: {})", username, host, is_local);
+    tracing::info!(
+        "Login attempt for user: {} on host: {} (local: {})",
+        username,
+        host,
+        is_local
+    );
 
     let auth_result = if is_local {
         // For local connections, use OS auth
@@ -201,7 +215,7 @@ async fn login_handler(
             AuthMethod::Password(p) => p.clone(),
             _ => form_password.clone(),
         };
-        
+
         if username.is_empty() || password.is_empty() {
             Err("Username and password required".to_string())
         } else {
@@ -211,13 +225,13 @@ async fn login_handler(
         // For remote connections, use SSH
         let ssh_auth = match &state.config.auth {
             AuthMethod::Password(p) => SshAuth::Password(p.clone()),
-            AuthMethod::KeyFile { path, passphrase } => SshAuth::KeyFile { 
-                path: path.clone(), 
-                passphrase: passphrase.clone() 
+            AuthMethod::KeyFile { path, passphrase } => SshAuth::KeyFile {
+                path: path.clone(),
+                passphrase: passphrase.clone(),
             },
-            AuthMethod::KeyData { data, passphrase } => SshAuth::KeyData { 
-                data: data.clone(), 
-                passphrase: passphrase.clone() 
+            AuthMethod::KeyData { data, passphrase } => SshAuth::KeyData {
+                data: data.clone(),
+                passphrase: passphrase.clone(),
             },
             AuthMethod::None => {
                 // Use form password if no auth method configured
@@ -245,7 +259,7 @@ async fn login_handler(
                 user: username.clone(),
                 auth: ssh_auth,
             };
-            
+
             match ssh::test_connection(ssh_config).await {
                 Ok(_) => Ok(username.clone()),
                 Err(e) => Err(e),
@@ -288,10 +302,7 @@ async fn login_handler(
 }
 
 /// Logout handler
-async fn logout_handler(
-    State(state): State<AppState>,
-    jar: CookieJar,
-) -> impl IntoResponse {
+async fn logout_handler(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
     if let Some(cookie) = jar.get(SESSION_COOKIE) {
         state.auth_sessions.remove_session(cookie.value()).await;
     }
@@ -301,14 +312,14 @@ async fn logout_handler(
         .http_only(true)
         .build();
 
-    (jar.remove(removal), Json(serde_json::json!({"success": true})))
+    (
+        jar.remove(removal),
+        Json(serde_json::json!({"success": true})),
+    )
 }
 
 /// Session check - returns current user if authenticated
-async fn session_check(
-    State(state): State<AppState>,
-    jar: CookieJar,
-) -> impl IntoResponse {
+async fn session_check(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
     if let Some(cookie) = jar.get(SESSION_COOKIE) {
         if let Some(username) = state.auth_sessions.validate_session(cookie.value()).await {
             return Json(serde_json::json!({
@@ -332,7 +343,10 @@ async fn ws_handler(
     // Check authentication
     let session = if let Some(cookie) = jar.get(SESSION_COOKIE) {
         let token = cookie.value().to_string();
-        state.auth_sessions.validate_session(&token).await
+        state
+            .auth_sessions
+            .validate_session(&token)
+            .await
             .map(|user| (token, user))
     } else {
         None
@@ -352,12 +366,21 @@ async fn ws_handler(
 }
 
 /// Handle WebSocket connection
-async fn handle_socket(socket: WebSocket, state: AppState, username: String, session_token: String) {
+async fn handle_socket(
+    socket: WebSocket,
+    state: AppState,
+    username: String,
+    session_token: String,
+) {
     let (mut sender, mut receiver) = socket.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<WsMessage>();
 
     let connection_id = uuid::Uuid::new_v4().to_string();
-    tracing::info!("WebSocket connected: {} (user: {})", connection_id, username);
+    tracing::info!(
+        "WebSocket connected: {} (user: {})",
+        connection_id,
+        username
+    );
 
     // Spawn task to send messages to the WebSocket
     let send_task = tokio::spawn(async move {
@@ -387,10 +410,13 @@ async fn handle_socket(socket: WebSocket, state: AppState, username: String, ses
     }
 
     send_task.abort();
-    
+
     // Logout on disconnect
     state.auth_sessions.remove_session(&session_token).await;
-    tracing::info!("WebSocket disconnected, session invalidated: {}", connection_id);
+    tracing::info!(
+        "WebSocket disconnected, session invalidated: {}",
+        connection_id
+    );
 }
 
 /// Handle a WebSocket message
