@@ -21,4 +21,7 @@ pub enum TerminalError {
 
     #[error("Maximum terminals reached")]
     MaxTerminalsReached,
+
+    #[error("Anyhow error: {0}")]
+    AnyhowError(#[from] anyhow::Error),
 }
