@@ -1,9 +1,6 @@
-//! Shared types for WebShell
-//!
-//! Common types used by both the backend and frontend.
+//! WebSocket message types
 
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 /// Terminal open request
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,55 +72,4 @@ pub enum WsMessage {
     /// Server notifies shell exit
     #[serde(rename = "shell.exit")]
     ShellExit(ShellExit),
-}
-
-/// Terminal settings
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TerminalSettings {
-    pub font_size: u16,
-    pub font_family: String,
-    pub cursor_style: CursorStyle,
-    pub cursor_blink: bool,
-    pub scrollback: u32,
-}
-
-impl Default for TerminalSettings {
-    fn default() -> Self {
-        Self {
-            font_size: 14,
-            font_family: "'JetBrains Mono', 'Fira Code', Consolas, monospace".to_string(),
-            cursor_style: CursorStyle::Block,
-            cursor_blink: true,
-            scrollback: 10000,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum CursorStyle {
-    Block,
-    Underline,
-    Bar,
-}
-
-/// Terminal session info
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TerminalSession {
-    pub id: String,
-    pub name: String,
-}
-
-impl TerminalSession {
-    pub fn new(number: usize) -> Self {
-        Self {
-            id: Uuid::new_v4().to_string(),
-            name: format!("Terminal {}", number),
-        }
-    }
-}
-
-/// Generate a new terminal ID
-pub fn generate_terminal_id() -> String {
-    Uuid::new_v4().to_string()
 }

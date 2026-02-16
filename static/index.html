@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebShell</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@4.19.0/css/xterm.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; width: 100%; background: #000; overflow: hidden; font-family: monospace; }
+        
+        /* Login screen */
+        #login-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #000;
+            color: #fff;
+        }
+        #login-screen h1 { margin-bottom: 2rem; font-size: 1.5rem; }
+        #login-form { display: flex; flex-direction: column; gap: 1rem; width: 300px; }
+        #login-form input {
+            padding: 0.75rem;
+            background: #111;
+            border: 1px solid #333;
+            color: #fff;
+            font-family: monospace;
+            font-size: 1rem;
+        }
+        #login-form input:focus { outline: none; border-color: #fff; }
+        #login-form input.hidden { display: none; }
+        #login-form button {
+            padding: 0.75rem;
+            background: #fff;
+            color: #000;
+            border: none;
+            font-family: monospace;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        #login-form button:hover { background: #ccc; }
+        #login-form button:disabled { background: #666; cursor: not-allowed; }
+        #login-error { color: #f00; font-size: 0.875rem; min-height: 1.25rem; }
+        #login-info { color: #666; font-size: 0.75rem; margin-top: 1rem; }
+        
+        /* Terminal screen */
+        #terminal-screen { display: none; height: 100vh; width: 100vw; }
+        #terminal { height: 100%; width: 100%; }
+        .xterm { height: 100%; width: 100%; }
+        
+        /* User info bar */
+        #user-bar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            padding: 0.5rem 1rem;
+            background: rgba(0,0,0,0.8);
+            color: #888;
+            font-size: 0.75rem;
+            z-index: 100;
+        }
+        #user-bar button {
+            margin-left: 1rem;
+            background: transparent;
+            border: 1px solid #444;
+            color: #888;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        #user-bar button:hover { border-color: #fff; color: #fff; }
+    </style>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="login-screen">
+        <h1>WebShell Login</h1>
+        <form id="login-form">
+            <input type="text" id="host" placeholder="Host" autocomplete="off">
+            <input type="text" id="username" placeholder="Username" autocomplete="username">
+            <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
+            <div id="login-error"></div>
+            <button type="submit">Login</button>
+        </form>
+        <div id="login-info"></div>
+    </div>
+
+    <!-- Terminal Screen -->
+    <div id="terminal-screen">
+        <div id="user-bar">
+            <span id="current-user"></span>
+            <button onclick="logout()">Logout</button>
+        </div>
+        <div id="terminal"></div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/xterm@4.19.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.5.0/lib/xterm-addon-fit.min.js"></script>
+    <script>
+        let term = null;
+        let ws = null;
+        let sessionId = null;
+        let appConfig = { host: null, user: null, auto_login: false };
+
+        // Fetch server config and initialize UI
+        async function init() {
+            try {
+                // Check existing session first
+                const sessionRes = await fetch('/api/session');
+                const sessionData = await sessionRes.json();
+                if (sessionData.authenticated) {
+                    showTerminal(sessionData.username);
+                    return;
+                }
+
+                // Fetch config
+                const configRes = await fetch('/api/config');
+                appConfig = await configRes.json();
+                applyConfig();
+
+                // Auto-login if configured
+                if (appConfig.auto_login) {
+                    document.getElementById('login-info').textContent = 'Connecting...';
+                    performLogin();
+                }
+            } catch (e) {
+                console.error('Init failed:', e);
+            }
+        }
+
+        // Apply config to UI - hide pre-configured fields
+        function applyConfig() {
+            const hostEl = document.getElementById('host');
+            const userEl = document.getElementById('username');
+            const infoEl = document.getElementById('login-info');
+
+            if (appConfig.host) {
+                hostEl.classList.add('hidden');
+                hostEl.value = appConfig.host;
+            } else {
+                hostEl.required = true;
+            }
+
+            if (appConfig.user) {
+                userEl.classList.add('hidden');
+                userEl.value = appConfig.user;
+            } else {
+                userEl.required = true;
+            }
+
+            // Show info about pre-configured values
+            let info = [];
+            if (appConfig.host) info.push(`Host: ${appConfig.host}`);
+            if (appConfig.user) info.push(`User: ${appConfig.user}`);
+            if (info.length > 0) {
+                infoEl.textContent = info.join(' | ');
+            }
+        }
+
+        // Perform login
+        async function performLogin() {
+            const btn = document.querySelector('#login-form button');
+            const errorEl = document.getElementById('login-error');
+            
+            btn.disabled = true;
+            errorEl.textContent = '';
+
+            const host = document.getElementById('host').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const body = new URLSearchParams();
+                if (host) body.append('host', host);
+                if (username) body.append('username', username);
+                if (password) body.append('password', password);
+
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: body.toString()
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    showTerminal(data.username);
+                } else {
+                    errorEl.textContent = data.message;
+                    document.getElementById('login-info').textContent = '';
+                }
+            } catch (e) {
+                errorEl.textContent = 'Connection failed';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // Login form handler
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            performLogin();
+        });
+
+        // Show terminal after successful login
+        function showTerminal(username) {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('terminal-screen').style.display = 'block';
+            document.getElementById('current-user').textContent = username;
+            initTerminal();
+        }
+
+        // Initialize xterm.js terminal
+        function initTerminal() {
+            term = new Terminal({
+                cursorBlink: true,
+                cursorStyle: 'block',
+                fontSize: 14,
+                fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
+                scrollback: 10000,
+                theme: {
+                    background: '#000000',
+                    foreground: '#ffffff',
+                    cursor: '#ffffff',
+                    cursorAccent: '#000000',
+                    selectionBackground: '#ffffff',
+                    selectionForeground: '#000000',
+                    black: '#000000',
+                    red: '#ff0000',
+                    green: '#00ff00',
+                    yellow: '#ffff00',
+                    blue: '#0000ff',
+                    magenta: '#ff00ff',
+                    cyan: '#00ffff',
+                    white: '#ffffff',
+                    brightBlack: '#808080',
+                    brightRed: '#ff0000',
+                    brightGreen: '#00ff00',
+                    brightYellow: '#ffff00',
+                    brightBlue: '#0000ff',
+                    brightMagenta: '#ff00ff',
+                    brightCyan: '#00ffff',
+                    brightWhite: '#ffffff'
+                }
+            });
+
+            const fitAddon = new FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+            term.open(document.getElementById('terminal'));
+            fitAddon.fit();
+
+            // WebSocket connection
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${location.host}/ws`);
+            sessionId = crypto.randomUUID();
+
+            ws.onopen = () => {
+                ws.send(JSON.stringify({
+                    type: 'term.open',
+                    data: { id: sessionId, cols: term.cols, rows: term.rows }
+                }));
+            };
+
+            ws.onmessage = (e) => {
+                const msg = JSON.parse(e.data);
+                if (msg.type === 'shell.output' && msg.data.id === sessionId) {
+                    term.write(msg.data.output);
+                } else if (msg.type === 'shell.exit' && msg.data.id === sessionId) {
+                    const code = msg.data.code ?? 'unknown';
+                    term.write(`\r\n\x1b[33m[Process exited with code ${code}]\x1b[0m\r\n`);
+                }
+            };
+
+            ws.onclose = () => term.write('\r\n\x1b[31m[Disconnected]\x1b[0m\r\n');
+            ws.onerror = () => term.write('\r\n\x1b[31m[Connection error]\x1b[0m\r\n');
+
+            // Send input to server
+            term.onData(data => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'term.input', data: { id: sessionId, input: data } }));
+                }
+            });
+
+            // Handle resize
+            const resizeObserver = new ResizeObserver(() => {
+                fitAddon.fit();
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'term.resize',
+                        data: { id: sessionId, cols: term.cols, rows: term.rows }
+                    }));
+                }
+            });
+            resizeObserver.observe(document.getElementById('terminal'));
+
+            term.focus();
+        }
+
+        // Logout function
+        async function logout() {
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+            } catch (e) {}
+            
+            if (ws) ws.close();
+            if (term) term.dispose();
+            
+            document.getElementById('terminal-screen').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'flex';
+            document.getElementById('password').value = '';
+            document.getElementById('login-error').textContent = '';
+        }
+
+        // Check session on load
+        init();
+    </script>
+</body>
+</html>

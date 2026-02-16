@@ -1,174 +1,112 @@
 # WebShell
 
-A lightweight, standalone web-based terminal built with Rust and React.
+A minimal web-based terminal with OS-native authentication. Pure Rust backend, vanilla JS frontend.
 
----
+## Features
 
-## ✨ Features
+- **OS Authentication** - Login with system credentials (macOS/Linux)
+- **WebSocket Terminal** - Real-time PTY via native WebSocket
+- **Minimal Frontend** - ~100 lines vanilla JS, no build step
+- **Single Binary** - One Rust executable serves everything
 
-- **Web-Based Terminal** - Access a shell from anywhere via browser
-- **Multiple Sessions** - Create and manage multiple terminal sessions
-- **Real-time Communication** - Socket.IO for low-latency terminal I/O
-- **PTY Support** - Full pseudo-terminal with proper signal handling
-- **Lightweight** - Minimal footprint, only terminal functionality
-- **Theme Support** - Light/Dark terminal themes
-- **Configurable** - Adjustable font, colors, scrollback buffer
-
----
-
-## 🚀 Quick Start
-
-### Using Docker (Recommended)
+## Quick Start
 
 ```bash
-cd webshell
-docker compose up
-```
-
-Open in browser: http://localhost:3000
-
-### Development Setup
-
-```bash
-# Terminal 1: Start Backend
-cd backend
-cp .env.example .env
+# Development
 cargo run
 
-# Terminal 2: Start Frontend
-cd frontend
-npm install
-npm run dev
+# Production
+cargo build --release
+./target/release/webshell
 ```
 
-Open in browser: http://localhost:5173
+Open http://localhost:3000 and login with your OS username/password.
 
----
-
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│            Browser (xterm.js)           │
-│  ┌─────────────────────────────────┐    │
-│  │   Terminal Emulator UI          │    │
-│  └──────────────┬──────────────────┘    │
-└─────────────────┼──────────────────────┘
-                  │ Socket.IO
-┌─────────────────┼──────────────────────┐
-│   Rust Backend (Axum + socketioxide)   │
-│  ┌──────────────┴──────────────────┐   │
-│  │   Terminal Session Manager      │   │
-│  │   ┌─────────────────────────┐   │   │
-│  │   │   PTY (portable-pty)    │   │   │
-│  │   └───────────┬─────────────┘   │   │
-│  └───────────────┼─────────────────┘   │
-└──────────────────┼──────────────────────┘
-                   │
-            ┌──────┴──────┐
-            │   Shell     │
-            │ (bash/zsh)  │
-            └─────────────┘
+Browser (xterm.js)
+       │ WebSocket
+       ▼
+   Rust (Axum)
+       │
+   ┌───┴───┐
+   │  PTY  │ ← OS Auth (dscl/su)
+   └───┬───┘
+       ▼
+     Shell
 ```
 
----
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 webshell/
-├── backend/                # Rust backend
-│   ├── src/
-│   │   ├── main.rs        # Entry point
-│   │   ├── config.rs      # Configuration
-│   │   └── terminal/      # Terminal/PTY logic
-│   │       ├── mod.rs
-│   │       ├── pty.rs     # PTY manager
-│   │       ├── session.rs # Session management
-│   │       └── socketio.rs# Socket.IO handlers
-│   └── Cargo.toml
-├── frontend/              # React frontend
-│   ├── src/
-│   │   ├── App.tsx        # Main app
-│   │   ├── Terminal.tsx   # xterm.js component
-│   │   └── store.ts       # State management
-│   └── package.json
-├── docker-compose.yml
-└── README.md
+├── src/
+│   ├── main.rs      # HTTP server, WebSocket, routes
+│   ├── auth.rs      # OS authentication & sessions
+│   ├── config.rs    # Environment configuration
+│   ├── types.rs     # WebSocket message types
+│   └── terminal/    # PTY management
+├── static/
+│   └── index.html   # Login + terminal UI
+├── Cargo.toml
+└── Dockerfile
 ```
 
----
-
-## 🔧 Configuration
-
-### Backend Environment
+## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | 3000 | HTTP server port |
-| `WORKSPACE_DIR` | /workspace | Terminal working directory |
-| `MAX_TERMINALS` | 10 | Max terminals per connection |
-| `IDLE_TIMEOUT` | 3600 | Session timeout in seconds |
+| `PORT` | 3000 | Server port |
+| `WORKSPACE_DIR` | ~ | Terminal working directory |
 | `RUST_LOG` | info | Log level |
+| `WEBSHELL_HOST` | (none) | Pre-configured host (hides field if set) |
+| `WEBSHELL_USER` | (none) | Pre-configured username (hides field if set) |
+| `WEBSHELL_PASSWORD` | (none) | Pre-configured password (auto-login if set with user) |
 
-### Frontend Environment
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VITE_API_URL` | http://localhost:3000 | Backend URL |
-
----
-
-## 🔌 Socket.IO Events
-
-### Client → Server
-- `term.open` - Open new terminal
-- `term.input` - Send input to terminal
-- `term.resize` - Resize terminal dimensions
-- `term.close` - Close terminal
-
-### Server → Client
-- `shell.output` - Terminal output data
-- `shell.exit` - Terminal process exited
-
----
-
-## 🐳 Docker
+### Examples
 
 ```bash
-# Build and run
-docker compose up --build
+# Full login form (host, user, password)
+cargo run
 
-# Production deployment
-docker compose -f docker-compose.prod.yml up -d
+# Host pre-set, ask for user + password
+WEBSHELL_HOST=192.168.1.50 cargo run
+
+# Only ask for password
+WEBSHELL_HOST=192.168.1.50 WEBSHELL_USER=admin cargo run
+
+# Auto-login (direct to terminal)
+WEBSHELL_HOST=localhost WEBSHELL_USER=admin WEBSHELL_PASSWORD=secret cargo run
 ```
 
----
+## WebSocket Protocol
 
-## 🔒 Security Considerations
+### Client → Server
+- `term.open` - Open terminal `{id, cols, rows}`
+- `term.input` - Send input `{id, input}`
+- `term.resize` - Resize `{id, cols, rows}`
+- `term.close` - Close terminal `{id}`
 
-⚠️ **Warning:** This gives shell access to the host system. Deploy with caution:
+### Server → Client
+- `shell.output` - Output data `{id, output}`
+- `shell.exit` - Process exited `{id, code}`
 
-- Run in isolated containers
-- Use proper authentication (not included in this basic version)
-- Limit network access
-- Monitor resource usage
-- Implement rate limiting
-- Consider using a restricted shell
+## Docker
 
----
+```bash
+docker compose up
+```
 
-## 📝 License
+## Security
 
-MIT License - Same as webide project
+- Authenticates against OS users via `dscl` (macOS) or `su` (Linux)
+- Session tokens stored server-side with 24h expiry
+- WebSocket connections require valid session cookie
+- **Auto-logout on disconnect** - Session invalidated when terminal closes
 
----
+⚠️ **Warning:** Exposes shell access. Use in trusted environments only.
 
-## 🙏 Credits
+## License
 
-Extracted and simplified from the [webide](../webide) project.
-
-- [xterm.js](https://xtermjs.org/) - Terminal emulator
-- [portable-pty](https://github.com/wez/wezterm/tree/main/pty) - Cross-platform PTY
-- [Axum](https://github.com/tokio-rs/axum) - Web framework
-- [socketioxide](https://github.com/Totodore/socketioxide) - Socket.IO for Rust
+MIT

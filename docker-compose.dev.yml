@@ -1,37 +1,22 @@
-# Development docker-compose with hot reload
-version: '3.8'
-
+# Development with cargo watch
 services:
-  backend:
+  webshell:
     image: rust:1.75-slim
     working_dir: /app
-    command: bash -c "apt-get update && apt-get install -y pkg-config libssl-dev && cargo watch -x run"
+    command: bash -c "apt-get update && apt-get install -y pkg-config libssl-dev && cargo install cargo-watch && cargo watch -x run"
     ports:
       - "3000:3000"
     environment:
       - PORT=3000
       - WORKSPACE_DIR=/workspace
+      - WEBSHELL_STATIC_DIR=/app/static
       - RUST_LOG=debug
     volumes:
-      - ./backend:/app
+      - .:/app
       - workspace:/workspace
       - cargo-cache:/usr/local/cargo/registry
     stdin_open: true
     tty: true
-
-  frontend:
-    image: node:20-alpine
-    working_dir: /app
-    command: sh -c "npm install && npm run dev"
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_URL=http://localhost:3000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      - backend
 
 volumes:
   workspace:
